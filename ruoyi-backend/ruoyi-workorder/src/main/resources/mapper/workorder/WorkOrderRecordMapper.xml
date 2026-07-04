@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.workorder.mapper.WorkOrderRecordMapper">
+
+    <resultMap id="WorkOrderRecordResult" type="com.ruoyi.workorder.domain.WorkOrderRecord">
+        <id property="recordId" column="record_id"/>
+        <result property="orderId" column="order_id"/>
+        <result property="repairBy" column="repair_by"/>
+        <result property="repairTime" column="repair_time"/>
+        <result property="repairSolution" column="repair_solution"/>
+        <result property="partConsumption" column="part_consumption"/>
+        <result property="imageUrls" column="image_urls"/>
+        <result property="repairResult" column="repair_result"/>
+        <result property="remark" column="remark"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="repairName" column="repair_name"/>
+    </resultMap>
+
+    <sql id="selectWorkOrderRecordVo">
+        SELECT r.record_id, r.order_id, r.repair_by, r.repair_time, r.repair_solution,
+               r.part_consumption, r.image_urls, r.repair_result, r.remark,
+               r.create_by, r.create_time, r.update_by, r.update_time,
+               u.user_name AS repair_name
+        FROM work_order_record r
+        LEFT JOIN sys_user u ON r.repair_by = u.user_name
+    </sql>
+
+    <select id="selectWorkOrderRecordList" parameterType="com.ruoyi.workorder.domain.WorkOrderRecord" resultMap="WorkOrderRecordResult">
+        <include refid="selectWorkOrderRecordVo"/>
+        <where>
+            <if test="orderId != null">
+                AND r.order_id = #{orderId}
+            </if>
+            <if test="repairBy != null and repairBy != ''">
+                AND r.repair_by = #{repairBy}
+            </if>
+            <if test="repairResult != null and repairResult != ''">
+                AND r.repair_result = #{repairResult}
+            </if>
+            <if test="params.beginTime != null and params.beginTime != ''">
+                AND r.create_time &gt;= #{params.beginTime}
+            </if>
+            <if test="params.endTime != null and params.endTime != ''">
+                AND r.create_time &lt;= #{params.endTime}
+            </if>
+        </where>
+        ORDER BY r.create_time DESC
+    </select>
+
+    <select id="selectWorkOrderRecordById" parameterType="Long" resultMap="WorkOrderRecordResult">
+        <include refid="selectWorkOrderRecordVo"/>
+        WHERE r.record_id = #{recordId}
+    </select>
+
+    <select id="selectWorkOrderRecordByOrderId" parameterType="Long" resultMap="WorkOrderRecordResult">
+        <include refid="selectWorkOrderRecordVo"/>
+        WHERE r.order_id = #{orderId}
+        ORDER BY r.create_time ASC
+    </select>
+
+    <insert id="insertWorkOrderRecord" parameterType="com.ruoyi.workorder.domain.WorkOrderRecord" useGeneratedKeys="true" keyProperty="recordId">
+        INSERT INTO work_order_record (
+            <if test="orderId != null">order_id,</if>
+            <if test="repairBy != null and repairBy != ''">repair_by,</if>
+            <if test="repairTime != null">repair_time,</if>
+            <if test="repairSolution != null and repairSolution != ''">repair_solution,</if>
+            <if test="partConsumption != null and partConsumption != ''">part_consumption,</if>
+            <if test="imageUrls != null and imageUrls != ''">image_urls,</if>
+            <if test="repairResult != null and repairResult != ''">repair_result,</if>
+            <if test="remark != null and remark != ''">remark,</if>
+            <if test="createBy != null and createBy != ''">create_by,</if>
+            create_time
+        ) VALUES (
+            <if test="orderId != null">#{orderId},</if>
+            <if test="repairBy != null and repairBy != ''">#{repairBy},</if>
+            <if test="repairTime != null">#{repairTime},</if>
+            <if test="repairSolution != null and repairSolution != ''">#{repairSolution},</if>
+            <if test="partConsumption != null and partConsumption != ''">#{partConsumption},</if>
+            <if test="imageUrls != null and imageUrls != ''">#{imageUrls},</if>
+            <if test="repairResult != null and repairResult != ''">#{repairResult},</if>
+            <if test="remark != null and remark != ''">#{remark},</if>
+            <if test="createBy != null and createBy != ''">#{createBy},</if>
+            SYSDATE()
+        )
+    </insert>
+
+    <update id="updateWorkOrderRecord" parameterType="com.ruoyi.workorder.domain.WorkOrderRecord">
+        UPDATE work_order_record
+        <set>
+            <if test="orderId != null">order_id = #{orderId},</if>
+            <if test="repairBy != null">repair_by = #{repairBy},</if>
+            <if test="repairTime != null">repair_time = #{repairTime},</if>
+            <if test="repairSolution != null">repair_solution = #{repairSolution},</if>
+            <if test="partConsumption != null">part_consumption = #{partConsumption},</if>
+            <if test="imageUrls != null">image_urls = #{imageUrls},</if>
+            <if test="repairResult != null">repair_result = #{repairResult},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
+            update_time = SYSDATE()
+        </set>
+        WHERE record_id = #{recordId}
+    </update>
+
+    <delete id="deleteWorkOrderRecordById" parameterType="Long">
+        DELETE FROM work_order_record WHERE record_id = #{recordId}
+    </delete>
+
+    <delete id="deleteWorkOrderRecordByIds" parameterType="Long">
+        DELETE FROM work_order_record WHERE record_id IN
+        <foreach item="recordId" collection="array" open="(" separator="," close=")">
+            #{recordId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteWorkOrderRecordByOrderId" parameterType="Long">
+        DELETE FROM work_order_record WHERE order_id = #{orderId}
+    </delete>
+
+</mapper>

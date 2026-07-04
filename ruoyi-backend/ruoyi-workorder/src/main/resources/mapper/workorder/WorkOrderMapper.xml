@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.workorder.mapper.WorkOrderMapper">
+
+    <resultMap id="WorkOrderResult" type="com.ruoyi.workorder.domain.WorkOrder">
+        <id property="orderId" column="order_id"/>
+        <result property="orderNo" column="order_no"/>
+        <result property="deviceId" column="device_id"/>
+        <result property="reporterBy" column="reporter_by"/>
+        <result property="faultDesc" column="fault_desc"/>
+        <result property="faultType" column="fault_type"/>
+        <result property="urgencyLevel" column="urgency_level"/>
+        <result property="orderStatus" column="order_status"/>
+        <result property="assignTo" column="assign_to"/>
+        <result property="assignTime" column="assign_time"/>
+        <result property="finishTime" column="finish_time"/>
+        <result property="archiveTime" column="archive_time"/>
+        <result property="archiveBy" column="archive_by"/>
+        <result property="archiveRemark" column="archive_remark"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="deviceName" column="device_name"/>
+        <result property="deviceCode" column="device_code"/>
+        <result property="reporterName" column="reporter_name"/>
+        <result property="assignName" column="assign_name"/>
+        <result property="recordCount" column="record_count"/>
+    </resultMap>
+
+    <sql id="selectWorkOrderVo">
+        SELECT wo.order_id, wo.order_no, wo.device_id, wo.reporter_by, wo.fault_desc,
+               wo.fault_type, wo.urgency_level, wo.order_status, wo.assign_to,
+               wo.assign_time, wo.finish_time, wo.archive_time, wo.archive_by,
+               wo.archive_remark, wo.create_by, wo.create_time, wo.update_by,
+               wo.update_time,
+               di.device_name, di.device_code,
+               ru1.user_name AS reporter_name,
+               ru2.user_name AS assign_name,
+               (SELECT COUNT(*) FROM work_order_record r WHERE r.order_id = wo.order_id) AS record_count
+        FROM work_order wo
+        LEFT JOIN device_info di ON wo.device_id = di.device_id
+        LEFT JOIN sys_user ru1 ON wo.reporter_by = ru1.user_name
+        LEFT JOIN sys_user ru2 ON wo.assign_to = ru2.user_name
+    </sql>
+
+    <select id="selectWorkOrderList" parameterType="com.ruoyi.workorder.domain.WorkOrder" resultMap="WorkOrderResult">
+        <include refid="selectWorkOrderVo"/>
+        <where>
+            <if test="orderNo != null and orderNo != ''">
+                AND wo.order_no LIKE CONCAT('%', #{orderNo}, '%')
+            </if>
+            <if test="deviceName != null and deviceName != ''">
+                AND di.device_name LIKE CONCAT('%', #{deviceName}, '%')
+            </if>
+            <if test="deviceId != null">
+                AND wo.device_id = #{deviceId}
+            </if>
+            <if test="reporterBy != null and reporterBy != ''">
+                AND wo.reporter_by LIKE CONCAT('%', #{reporterBy}, '%')
+            </if>
+            <if test="assignTo != null and assignTo != ''">
+                AND wo.assign_to = #{assignTo}
+            </if>
+            <if test="orderStatus != null and orderStatus != ''">
+                AND wo.order_status = #{orderStatus}
+            </if>
+            <if test="urgencyLevel != null and urgencyLevel != ''">
+                AND wo.urgency_level = #{urgencyLevel}
+            </if>
+            <if test="faultType != null and faultType != ''">
+                AND wo.fault_type = #{faultType}
+            </if>
+            <if test="params.beginTime != null and params.beginTime != ''">
+                AND wo.create_time &gt;= #{params.beginTime}
+            </if>
+            <if test="params.endTime != null and params.endTime != ''">
+                AND wo.create_time &lt;= #{params.endTime}
+            </if>
+        </where>
+        ORDER BY wo.create_time DESC
+    </select>
+
+    <select id="selectWorkOrderById" parameterType="Long" resultMap="WorkOrderResult">
+        <include refid="selectWorkOrderVo"/>
+        WHERE wo.order_id = #{orderId}
+    </select>
+
+    <insert id="insertWorkOrder" parameterType="com.ruoyi.workorder.domain.WorkOrder" useGeneratedKeys="true" keyProperty="orderId">
+        INSERT INTO work_order (
+            <if test="orderNo != null and orderNo != ''">order_no,</if>
+            <if test="deviceId != null">device_id,</if>
+            <if test="reporterBy != null and reporterBy != ''">reporter_by,</if>
+            <if test="faultDesc != null and faultDesc != ''">fault_desc,</if>
+            <if test="faultType != null and faultType != ''">fault_type,</if>
+            <if test="urgencyLevel != null and urgencyLevel != ''">urgency_level,</if>
+            <if test="orderStatus != null and orderStatus != ''">order_status,</if>
+            <if test="assignTo != null and assignTo != ''">assign_to,</if>
+            <if test="assignTime != null">assign_time,</if>
+            <if test="finishTime != null">finish_time,</if>
+            <if test="archiveTime != null">archive_time,</if>
+            <if test="archiveBy != null and archiveBy != ''">archive_by,</if>
+            <if test="archiveRemark != null and archiveRemark != ''">archive_remark,</if>
+            <if test="createBy != null and createBy != ''">create_by,</if>
+            create_time
+        ) VALUES (
+            <if test="orderNo != null and orderNo != ''">#{orderNo},</if>
+            <if test="deviceId != null">#{deviceId},</if>
+            <if test="reporterBy != null and reporterBy != ''">#{reporterBy},</if>
+            <if test="faultDesc != null and faultDesc != ''">#{faultDesc},</if>
+            <if test="faultType != null and faultType != ''">#{faultType},</if>
+            <if test="urgencyLevel != null and urgencyLevel != ''">#{urgencyLevel},</if>
+            <if test="orderStatus != null and orderStatus != ''">#{orderStatus},</if>
+            <if test="assignTo != null and assignTo != ''">#{assignTo},</if>
+            <if test="assignTime != null">#{assignTime},</if>
+            <if test="finishTime != null">#{finishTime},</if>
+            <if test="archiveTime != null">#{archiveTime},</if>
+            <if test="archiveBy != null and archiveBy != ''">#{archiveBy},</if>
+            <if test="archiveRemark != null and archiveRemark != ''">#{archiveRemark},</if>
+            <if test="createBy != null and createBy != ''">#{createBy},</if>
+            SYSDATE()
+        )
+    </insert>
+
+    <update id="updateWorkOrder" parameterType="com.ruoyi.workorder.domain.WorkOrder">
+        UPDATE work_order
+        <set>
+            <if test="deviceId != null">device_id = #{deviceId},</if>
+            <if test="reporterBy != null">reporter_by = #{reporterBy},</if>
+            <if test="faultDesc != null">fault_desc = #{faultDesc},</if>
+            <if test="faultType != null">fault_type = #{faultType},</if>
+            <if test="urgencyLevel != null">urgency_level = #{urgencyLevel},</if>
+            <if test="orderStatus != null">order_status = #{orderStatus},</if>
+            <if test="assignTo != null">assign_to = #{assignTo},</if>
+            <if test="assignTime != null">assign_time = #{assignTime},</if>
+            <if test="finishTime != null">finish_time = #{finishTime},</if>
+            <if test="archiveTime != null">archive_time = #{archiveTime},</if>
+            <if test="archiveBy != null">archive_by = #{archiveBy},</if>
+            <if test="archiveRemark != null">archive_remark = #{archiveRemark},</if>
+            <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
+            update_time = SYSDATE()
+        </set>
+        WHERE order_id = #{orderId}
+    </update>
+
+    <delete id="deleteWorkOrderById" parameterType="Long">
+        DELETE FROM work_order WHERE order_id = #{orderId}
+    </delete>
+
+    <delete id="deleteWorkOrderByIds" parameterType="Long">
+        DELETE FROM work_order WHERE order_id IN
+        <foreach item="orderId" collection="array" open="(" separator="," close=")">
+            #{orderId}
+        </foreach>
+    </delete>
+
+    <!-- 当月工单统计 -->
+    <select id="selectWorkOrderStats" resultType="com.ruoyi.workorder.domain.WorkOrderStats">
+        SELECT
+            COUNT(*) AS totalCount,
+            SUM(CASE WHEN order_status IN ('0','1') THEN 1 ELSE 0 END) AS pendingCount,
+            SUM(CASE WHEN order_status = '2' THEN 1 ELSE 0 END) AS inProgressCount,
+            SUM(CASE WHEN order_status = '3' THEN 1 ELSE 0 END) AS completedCount
+        FROM work_order
+        WHERE DATE_FORMAT(create_time, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+    </select>
+
+    <!-- 故障率Top10设备 -->
+    <select id="selectFaultTopDevices" resultType="com.ruoyi.workorder.domain.FaultTopDevice">
+        SELECT
+            di.device_id, di.device_name, COUNT(*) AS faultCount
+        FROM work_order wo
+        LEFT JOIN device_info di ON wo.device_id = di.device_id
+        WHERE DATE_FORMAT(wo.create_time, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+        GROUP BY wo.device_id, di.device_name
+        ORDER BY faultCount DESC
+        LIMIT 10
+    </select>
+
+</mapper>
