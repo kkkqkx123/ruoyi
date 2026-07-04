@@ -3,8 +3,12 @@ import type { SysUser } from './system/user'
 
 // 登录响应
 export interface LoginInfoResult extends AjaxResult {
-  /** 令牌 */
-  token: string
+  /** 令牌（兼容旧版单 Token） */
+  token?: string
+  /** 访问令牌（双 Token 模式） */
+  accessToken?: string
+  /** 刷新令牌（双 Token 模式） */
+  refreshToken?: string
 }
 
 /** 用户信息响应 */

@@ -1,12 +1,12 @@
 # 设备工单管理系统 — 扩展功能总结
 
-> 文档版本：v1.0 | 编写日期：2026-07-03 | 基于 RuoYi v3.9.2 (Spring Boot 4.0.6)
+> 文档版本：v1.1 | 编写日期：2026-07-03 | 最后更新：2026-07-04 | 基于 RuoYi v3.9.2 (Spring Boot 4.0.6)
 
 ---
 
 ## 一、总体说明
 
-本系统在若依框架（RuoYi-Vue3）基础上，完成了 **4 个阶段、30+ 项扩展功能** 的开发，覆盖设备工单核心业务、性能优化、安全增强、异常体系统一等维度。
+本系统在若依框架（RuoYi-Vue3）基础上，完成了 **4 个阶段、30+ 项扩展功能、3 项前端配套改造** 的开发，覆盖设备工单核心业务、性能优化、安全增强、异常体系统一及前端适配等维度。
 
 | 阶段 | 主题 | 扩展功能数 | 涉及模块 |
 |------|------|-----------|----------|
@@ -79,7 +79,15 @@
 | 异步导出 | `ExportTaskService` + `sys_export_task` 表，后台线程执行导出，完成后站内通知下载 |
 | 导出限流 | 同一用户同时只能有一个进行中的导出任务 |
 
-### 3.4 SQL 索引优化
+### 3.4 前端异步导出管理
+
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| 导出任务类型定义 + API | `src/types/api/system/exportTask.ts` | ExportTask 接口 + submitExportTask / getExportTaskStatus / downloadExportFile / listExportTask |
+| 导出任务管理页面 | `src/views/system/exportTask/index.vue` | 状态筛选查询、状态标签颜色、已完成下载、失败错误详情、删除功能 |
+| 类型统一导出 | `src/types/api/index.ts` | 新增 `export * from "./system/exportTask"` |
+
+### 3.5 SQL 索引优化
 
 | 索引 | 表 | 覆盖场景 |
 |------|-----|----------|
@@ -119,7 +127,26 @@
 | JWT 过滤器改造 | `JwtAuthenticationTokenFilter` 增加黑名单检查 |
 | `/refresh` 端点 | `SysLoginController` 新增续期接口 |
 
-### 4.4 MinIO 对象存储
+### 4.4 前端双 Token 适配
+
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| refreshToken 存取 | `src/utils/auth.ts` | 新增 getRefreshToken / setRefreshToken / removeRefreshToken |
+| 自动续期拦截器 | `src/utils/request.ts` | 401 时优先使用 refreshToken 无感续期，isRefreshing + 请求队列防止并发 |
+| 登录/登出兼容 | `src/store/modules/user.ts` | login 兼容双 Token/单 Token，logOut 清除 refreshToken |
+| 类型定义 | `src/types/api/login.ts` | LoginInfoResult 增加 accessToken? refreshToken? 字段 |
+
+```mermaid
+graph TD
+    A[401 响应] --> B{有 refreshToken?}
+    B -->|是| C[调用 /refreshToken]
+    C -->|成功| D[更新本地 Token]
+    D --> E[重试原始请求]
+    C -->|失败| F[跳转登录页]
+    B -->|否| F
+```
+
+### 4.5 MinIO 对象存储
 
 | 组件 | 说明 |
 |------|------|
@@ -140,7 +167,24 @@
 | `BizException` | 统一业务异常类，基于 BizErrorCode 枚举构造，与 ServiceException 并存 |
 | `GlobalExceptionHandler` 增强 | BizException 用 INFO 级别（含 code/uri/userId/username/msg），系统异常增加请求参数记录 |
 
-### 5.2 异步任务改造
+### 5.2 前端错误码映射
+
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| 错误码字典 | `src/utils/errorCode.ts` | 新增 14 个业务错误码中文映射，覆盖 1xxx-5xxx 全段 |
+| 兼容性 | 响应拦截器 `errorCode[code] \|\| res.data.msg \|\| errorCode['default']` | 已有逻辑兼容 BizErrorCode 返回格式 |
+
+错误码分段：
+
+| 段 | 错误码 | 对应模块 |
+|---|--------|----------|
+| 1xxx | 1001-1005 | 工单模块（不存在/已存在/状态不允许/已归档/创建失败） |
+| 2xxx | 2001-2003 | 设备模块（不存在/编码已存在/状态不允许） |
+| 3xxx | 3001-3001 | 库存模块（库存不足） |
+| 4xxx | 4001-4004 | 文件模块（类型不允许/内容不安全/大小超限/上传失败） |
+| 5xxx | 5001-5003 | 通用模块（参数错误/业务处理失败/操作频繁） |
+
+### 5.3 异步任务改造
 
 | 组件 | 说明 |
 |------|------|
@@ -159,34 +203,56 @@
 | ruoyi-framework | 4 | 4 | 8 |
 | ruoyi-admin | 0 | 3 | 3 |
 | ruoyi-workorder | 17 | 1 | 18 |
-| 前端 (ruoyi/) | 10 | 1 | 11 |
+| 前端 (ruoyi/) | 3 | 7 | 10 |
 | SQL | 2 | 0 | 2 |
-| 文档 | 5 | 1 | 6 |
-| **合计** | **48** | **11** | **59** |
+| 文档 | 5 | 2 | 7 |
+| **合计** | **41** | **18** | **59** |
+
+前端文件明细：
+
+| 变更类型 | 文件路径 | 说明 |
+|----------|----------|------|
+| 新增 | `src/types/api/system/exportTask.ts` | 导出任务类型 + 4 个 API 函数 |
+| 新增 | `src/views/system/exportTask/index.vue` | 导出任务管理页面 |
+| 新增 | `src/__tests__/utils/ruoyi.test.ts` | 工具函数测试 |
+| 修改 | `src/utils/auth.ts` | +refreshToken 存取方法 |
+| 修改 | `src/utils/request.ts` | +refreshToken 自动续期、+handleLogout |
+| 修改 | `src/utils/errorCode.ts` | +14 个 BizErrorCode 映射 |
+| 修改 | `src/store/modules/user.ts` | 兼容双 Token 登录/登出 |
+| 修改 | `src/types/api/login.ts` | +accessToken/refreshToken 字段 |
+| 修改 | `src/types/api/index.ts` | +exportTask 导出 |
+| 修改 | `src/api/login.ts` | 兼容双 Token 返回格式 |
 
 ---
 
 ## 七、现有测试覆盖
 
-### 后端单元测试（5 个文件，~60+ 测试用例）
+### 后端单元测试（12 个文件，109 个测试用例）
 
 | 测试文件 | 测试数 | 覆盖范围 |
 |----------|--------|----------|
 | WorkOrderServiceImplTest | 27 | 工单创建、雪花ID、紧急通知、批量分配、完成校验、归档校验、状态流转 |
-| WorkOrderControllerTest | 15 | 分页列表、CRUD、批量分配、统计看板、导出 |
+| WorkOrderControllerTest | 15 | 分页列表、CRUD、批量分配、统计看板、导出、异步导出 |
 | WorkOrderRecordControllerTest | 7 | 记录 CRUD |
 | DeviceInfoControllerTest | 9 | 设备 CRUD |
-| RedisCacheAnnotationTest | - | 缓存注解行为 |
+| DeviceInfoServiceImplTest | 12 | 设备 CRUD 全路径 |
+| WorkOrderRecordServiceImplTest | 10 | 记录 CRUD 全路径 |
+| BizErrorCodeTest | 5 | 枚举值、code 段规则、消息映射 |
+| BizExceptionTest | 5 | 构造器、错误码、自定义消息、堆栈、序列化 |
+| SecurityFileUtilsTest | 10 | Magic Number 校验、路径穿越防护 |
+| GlobalExceptionHandlerTest | 4 | BizException 处理、通用异常处理 |
+| AsyncWorkOrderServiceTest | 3 | 异步通知推送、异常处理 |
+| RedisCacheAnnotationTest | 2 | 缓存注解行为 |
 
-### 前端单元测试（5 个文件，~62 个测试用例）
+### 前端单元测试（5 个文件，62 个测试用例）
 
 | 测试文件 | 测试数 | 覆盖范围 |
 |----------|--------|----------|
-| API workorder/order.test.ts | 15 | 工单 8 个接口请求 |
+| API workorder/order.test.ts | 17 | 工单 8 个接口请求 |
 | API workorder/record.test.ts | 7 | 记录 3 个接口请求 |
-| API device/info.test.ts | 6 | 设备 5 个接口请求 |
-| types/workorder.test.ts | 12 | 类型定义验证 |
-| utils/ruoyi.test.ts | 11 | 工具函数 |
+| API device/info.test.ts | 7 | 设备 5 个接口请求 |
+| types/workorder.test.ts | 14 | 类型定义验证 |
+| utils/ruoyi.test.ts | 17 | 工具函数 |
 
 ---
 
@@ -202,5 +268,8 @@
 | 脱敏 | @Sensitive 字段级 | @Desensitize 方法级 AOP |
 | 防重复提交 | 基本 URL+Token 匹配 | 参数MD5签名 + 业务级锁 |
 | 登录 | 单 Token 30分钟 | 双 Token + refreshToken + 黑名单 |
+| 前端 Token 续期 | 401 直接弹重新登录框 | 自动 refreshToken 无感续期 + 并发队列安全 |
+| 前端错误码 | 仅 401/403/404 | 新增 14 个 BizErrorCode 中文映射（1xxx-5xxx） |
+| 前端导出 | 同步下载，前端阻塞等待 | 异步提交任务 + 轮询状态 + 自动下载 |
 | 文件存储 | 仅本地 | 本地 + MinIO 策略切换 |
 | 文件安全 | 仅扩展名校验 | Magic Number + 路径穿越防护 |

@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { ElNotification , ElMessageBox, ElMessage, ElLoading } from 'element-plus'
-import { getToken } from '@/utils/auth'
+import { getToken, getRefreshToken, setToken, setRefreshToken } from '@/utils/auth'
 import errorCode from '@/utils/errorCode'
 import { tansParams, blobValidate } from '@/utils/ruoyi'
 import cache from '@/plugins/cache'
@@ -10,6 +10,20 @@ import useUserStore from '@/store/modules/user'
 let downloadLoadingInstance: ReturnType<typeof ElLoading.service>
 // 是否显示重新登录
 export const isRelogin = { show: false }
+
+// 是否正在刷新 Token
+let isRefreshing = false
+// 等待刷新 Token 的请求队列
+let refreshSubscribers: ((token: string) => void)[] = []
+
+function onRefreshed(token: string) {
+  refreshSubscribers.forEach(callback => callback(token))
+  refreshSubscribers = []
+}
+
+function addRefreshSubscriber(callback: (token: string) => void) {
+  refreshSubscribers.push(callback)
+}
 
 axios.defaults.headers['Content-Type'] = 'application/json;charset=utf-8'
 // 创建axios实例
@@ -83,17 +97,58 @@ service.interceptors.response.use((res: any) => {
       return res.data
     }
     if (code === 401) {
+      // 双 Token 模式：尝试自动续期
+      const refreshToken = getRefreshToken()
+      if (refreshToken && !res.config?.url?.includes('/refreshToken')) {
+        const originalRequest = res.config
+        if (!isRefreshing) {
+          isRefreshing = true
+          return new Promise((resolve, reject) => {
+            axios({
+              url: (service.defaults.baseURL || '') + '/refreshToken',
+              method: 'post',
+              data: { refreshToken },
+              headers: { isToken: false, 'Content-Type': 'application/json' }
+            }).then(response => {
+              const data = response.data
+              if (data.code === 200) {
+                const newToken = data.data?.accessToken || data.accessToken
+                const newRefreshToken = data.data?.refreshToken || data.refreshToken
+                if (newToken) setToken(newToken)
+                if (newRefreshToken) setRefreshToken(newRefreshToken)
+                isRefreshing = false
+                onRefreshed(newToken)
+                // 重试原始请求
+                originalRequest.headers['Authorization'] = 'Bearer ' + newToken
+                resolve(service(originalRequest))
+              } else {
+                isRefreshing = false
+                refreshSubscribers = []
+                handleLogout()
+                reject(new Error('Token 续期失败'))
+              }
+            }).catch(() => {
+              isRefreshing = false
+              refreshSubscribers = []
+              handleLogout()
+              reject(new Error('Token 续期失败'))
+            })
+          })
+        } else {
+          // 正在刷新中，将请求加入队列等待
+          return new Promise(resolve => {
+            addRefreshSubscriber((token: string) => {
+              originalRequest.headers['Authorization'] = 'Bearer ' + token
+              resolve(service(originalRequest))
+            })
+          })
+        }
+      }
+      // 无 refreshToken 或 refresh 请求本身 401 → 直接登出
       if (!isRelogin.show) {
         isRelogin.show = true
-        ElMessageBox.confirm('登录状态已过期，您可以继续留在该页面，或者重新登录', '系统提示', { confirmButtonText: '重新登录', cancelButtonText: '取消', type: 'warning' }).then(() => {
-          isRelogin.show = false
-          useUserStore().logOut().then(() => {
-            location.href = '/index'
-          })
-      }).catch(() => {
-        isRelogin.show = false
-      })
-    }
+        handleLogout()
+      }
       return Promise.reject('无效的会话，或者会话已过期，请重新登录。')
     } else if (code === 500) {
       ElMessage({ message: msg, type: 'error' })
@@ -122,6 +177,18 @@ service.interceptors.response.use((res: any) => {
     return Promise.reject(error)
   }
 )
+
+/** 处理登出 - 清理 Token 并跳转登录页 */
+function handleLogout() {
+  ElMessageBox.confirm('登录状态已过期，您可以继续留在该页面，或者重新登录', '系统提示', { confirmButtonText: '重新登录', cancelButtonText: '取消', type: 'warning' }).then(() => {
+    isRelogin.show = false
+    useUserStore().logOut().then(() => {
+      location.href = '/index'
+    })
+  }).catch(() => {
+    isRelogin.show = false
+  })
+}
 
 // 通用下载方法
 export function download(url: string, params: any, filename: string, config?: any) {

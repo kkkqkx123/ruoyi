@@ -2,8 +2,7 @@ package com.ruoyi.workorder.service.impl;
 
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.IdUtil;
-import com.ruoyi.system.domain.SysNotice;
-import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.exception.BizException;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.workorder.domain.FaultTopDevice;
 import com.ruoyi.workorder.domain.WorkOrder;
@@ -11,7 +10,6 @@ import com.ruoyi.workorder.domain.WorkOrderRecord;
 import com.ruoyi.workorder.domain.WorkOrderStats;
 import com.ruoyi.workorder.mapper.WorkOrderMapper;
 import com.ruoyi.workorder.mapper.WorkOrderRecordMapper;
-import com.ruoyi.system.service.ISysNoticeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -50,7 +48,7 @@ class WorkOrderServiceImplTest {
     private WorkOrderRecordMapper workOrderRecordMapper;
 
     @Mock
-    private ISysNoticeService noticeService;
+    private AsyncWorkOrderService asyncWorkOrderService;
 
     @InjectMocks
     private WorkOrderServiceImpl workOrderService;
@@ -88,43 +86,35 @@ class WorkOrderServiceImplTest {
             assertTrue(validWorkOrder.getOrderNo().startsWith("WO" + DateUtil.format(new Date(), "yyyyMMdd")));
             assertEquals("0", validWorkOrder.getOrderStatus());
             verify(workOrderMapper, times(1)).insertWorkOrder(validWorkOrder);
-            verify(noticeService, never()).insertNotice(any());
+            verify(asyncWorkOrderService, never()).pushUrgentNotice(any());
         }
 
         @Test
-        @DisplayName("紧急工单 - 自动推送通知")
+        @DisplayName("紧急工单 - 自动异步推送通知")
         void shouldPushNoticeForUrgentOrder() {
             // Arrange
             validWorkOrder.setUrgencyLevel("2"); // 紧急
             when(workOrderMapper.insertWorkOrder(any(WorkOrder.class))).thenReturn(1);
-            when(noticeService.insertNotice(any(SysNotice.class))).thenReturn(1);
 
             // Act
             workOrderService.insertWorkOrder(validWorkOrder);
 
             // Assert
-            ArgumentCaptor<SysNotice> noticeCaptor = ArgumentCaptor.forClass(SysNotice.class);
-            verify(noticeService, times(1)).insertNotice(noticeCaptor.capture());
-
-            SysNotice pushedNotice = noticeCaptor.getValue();
-            assertTrue(pushedNotice.getNoticeTitle().contains(validWorkOrder.getOrderNo()));
-            assertEquals("1", pushedNotice.getNoticeType());
-            assertTrue(pushedNotice.getNoticeContent().contains(validWorkOrder.getFaultDesc()));
+            verify(asyncWorkOrderService, times(1)).pushUrgentNotice(validWorkOrder);
         }
 
         @Test
-        @DisplayName("特急工单 - 自动推送通知")
+        @DisplayName("特急工单 - 自动异步推送通知")
         void shouldPushNoticeForUrgentLevel3Order() {
             // Arrange
             validWorkOrder.setUrgencyLevel("3"); // 特急
             when(workOrderMapper.insertWorkOrder(any(WorkOrder.class))).thenReturn(1);
-            when(noticeService.insertNotice(any(SysNotice.class))).thenReturn(1);
 
             // Act
             workOrderService.insertWorkOrder(validWorkOrder);
 
             // Assert
-            verify(noticeService, times(1)).insertNotice(any(SysNotice.class));
+            verify(asyncWorkOrderService, times(1)).pushUrgentNotice(validWorkOrder);
         }
 
         @Test
@@ -138,7 +128,7 @@ class WorkOrderServiceImplTest {
             workOrderService.insertWorkOrder(validWorkOrder);
 
             // Assert
-            verify(noticeService, never()).insertNotice(any());
+            verify(asyncWorkOrderService, never()).pushUrgentNotice(any());
         }
     }
 
@@ -235,7 +225,7 @@ class WorkOrderServiceImplTest {
             when(workOrderMapper.selectWorkOrderById(1L)).thenReturn(null);
 
             // Act & Assert
-            ServiceException ex = assertThrows(ServiceException.class,
+            BizException ex = assertThrows(BizException.class,
                     () -> workOrderService.completeWorkOrder(validRecord));
             assertEquals("工单不存在", ex.getMessage());
             verify(workOrderRecordMapper, never()).insertWorkOrderRecord(any());
@@ -250,9 +240,9 @@ class WorkOrderServiceImplTest {
             when(workOrderMapper.selectWorkOrderById(1L)).thenReturn(existingOrder);
 
             // Act & Assert
-            ServiceException ex = assertThrows(ServiceException.class,
+            BizException ex = assertThrows(BizException.class,
                     () -> workOrderService.completeWorkOrder(validRecord));
-            assertEquals("仅维修中的工单可以完成", ex.getMessage());
+            assertEquals("工单当前状态不允许此操作", ex.getMessage());
         }
 
         @Test
@@ -263,7 +253,7 @@ class WorkOrderServiceImplTest {
             when(workOrderMapper.selectWorkOrderById(1L)).thenReturn(existingOrder);
 
             // Act & Assert
-            ServiceException ex = assertThrows(ServiceException.class,
+            BizException ex = assertThrows(BizException.class,
                     () -> workOrderService.completeWorkOrder(validRecord));
             assertEquals("请填写维修方案", ex.getMessage());
         }
@@ -276,7 +266,7 @@ class WorkOrderServiceImplTest {
             when(workOrderMapper.selectWorkOrderById(1L)).thenReturn(existingOrder);
 
             // Act & Assert
-            ServiceException ex = assertThrows(ServiceException.class,
+            BizException ex = assertThrows(BizException.class,
                     () -> workOrderService.completeWorkOrder(validRecord));
             assertEquals("请上传至少一张维修图片", ex.getMessage());
         }
@@ -289,7 +279,7 @@ class WorkOrderServiceImplTest {
             when(workOrderMapper.selectWorkOrderById(1L)).thenReturn(existingOrder);
 
             // Act & Assert
-            ServiceException ex = assertThrows(ServiceException.class,
+            BizException ex = assertThrows(BizException.class,
                     () -> workOrderService.completeWorkOrder(validRecord));
             assertEquals("请填写维修方案", ex.getMessage());
         }
@@ -302,7 +292,7 @@ class WorkOrderServiceImplTest {
             when(workOrderMapper.selectWorkOrderById(1L)).thenReturn(existingOrder);
 
             // Act & Assert
-            ServiceException ex = assertThrows(ServiceException.class,
+            BizException ex = assertThrows(BizException.class,
                     () -> workOrderService.completeWorkOrder(validRecord));
             assertEquals("请上传至少一张维修图片", ex.getMessage());
         }
@@ -348,7 +338,7 @@ class WorkOrderServiceImplTest {
             when(workOrderMapper.selectWorkOrderById(1L)).thenReturn(null);
 
             // Act & Assert
-            ServiceException ex = assertThrows(ServiceException.class,
+            BizException ex = assertThrows(BizException.class,
                     () -> workOrderService.archiveWorkOrder(1L, "admin", "验收通过"));
             assertEquals("工单不存在", ex.getMessage());
             verify(workOrderMapper, never()).updateWorkOrder(any());
@@ -362,7 +352,7 @@ class WorkOrderServiceImplTest {
             when(workOrderMapper.selectWorkOrderById(1L)).thenReturn(completedOrder);
 
             // Act & Assert
-            ServiceException ex = assertThrows(ServiceException.class,
+            BizException ex = assertThrows(BizException.class,
                     () -> workOrderService.archiveWorkOrder(1L, "admin", "验收通过"));
             assertEquals("仅已完成的工单可以归档", ex.getMessage());
         }
@@ -510,7 +500,7 @@ class WorkOrderServiceImplTest {
             when(workOrderMapper.selectWorkOrderById(1L)).thenReturn(order);
 
             // Act & Assert
-            assertThrows(ServiceException.class,
+            assertThrows(BizException.class,
                     () -> workOrderService.completeWorkOrder(record));
         }
 
@@ -525,7 +515,7 @@ class WorkOrderServiceImplTest {
             when(workOrderMapper.selectWorkOrderById(1L)).thenReturn(order);
 
             // Act & Assert
-            assertThrows(ServiceException.class,
+            assertThrows(BizException.class,
                     () -> workOrderService.archiveWorkOrder(1L, "admin", ""));
         }
     }

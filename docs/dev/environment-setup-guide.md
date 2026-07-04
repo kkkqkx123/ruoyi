@@ -406,4 +406,97 @@ ruoyi:
 | 9 | `ruoyi-files` 存储桶已创建 | MinIO 控制台创建或应用自动创建 | ☐ |
 | 10 | `application.yml` 配置已按需调整 | 数据源、Redis、文件策略等 | ☐ |
 | 11 | 后端启动成功 | 访问 `http://localhost:8080` 无报错 | ☐ |
-| 12 | 前端启动成功（可选） | `cd ruoyi && npm run dev` | ☐ |
+| 12 | 前端启动成功（可选） | `cd ruoyi && npm run dev` |
+| 13 | MySQL 已安装（无 Docker 环境） | `apt install mysql-server` + `mysqld --user=mysql --datadir=/var/lib/mysql` | ☐ |
+| 14 | Redis 已安装（无 Docker 环境） | `apt install redis-server` + `redis-server --daemonize yes` | ☐ |
+
+---
+
+## 8. 沙箱环境补充说明
+
+### 8.1 适用场景
+
+当开发环境为**远程沙箱（无 Docker、无 systemd）** 时，无法使用 Docker 部署 MySQL 和 Redis，需要直接通过包管理器安装并手动启动服务。
+
+### 8.2 MySQL 安装与启动
+
+```bash
+# 安装 MySQL 8.0
+sudo apt update
+sudo apt install -y mysql-server
+
+# 手动初始化数据目录（首次启动需要）
+# 注意：沙箱无 systemd，不能使用 systemctl start mysql
+sudo mysqld --initialize-insecure --user=mysql
+
+# 启动 MySQL（前台启动，占用终端）
+# 生产建议使用 nohup 或 tmux 管理
+sudo mysqld --user=mysql --datadir=/var/lib/mysql &
+
+# 设置 root 密码（初始无密码）
+sudo mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'password';"
+
+# 创建数据库
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS ry-vue CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# 导入 SQL 脚本
+mysql -u root -p ry-vue < ruoyi-backend/sql/ry_20260417.sql
+mysql -u root -p ry-vue < ruoyi-backend/sql/device-workorder.sql
+```
+
+### 8.3 Redis 安装与启动
+
+```bash
+# 安装 Redis 7.0
+sudo apt install -y redis-server
+
+# 启动 Redis（守护进程模式）
+# 注意：沙箱无 systemd，不能使用 systemctl start redis-server
+redis-server --daemonize yes
+
+# 验证连接
+redis-cli ping
+# 应返回 PONG
+
+# 连接 Redis
+redis-cli
+```
+
+### 8.4 验证服务状态
+
+```bash
+# 检查 MySQL 进程
+ps aux | grep mysqld
+
+# 检查 Redis 进程
+ps aux | grep redis-server
+
+# 检查 MySQL 端口
+ss -tlnp | grep 3306
+
+# 检查 Redis 端口
+ss -tlnp | grep 6379
+```
+
+### 8.5 常见问题
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| `mysqld: Can't create directory` | 数据目录权限不足 | `sudo chown -R mysql:mysql /var/lib/mysql` |
+| `auth_socket` 插件导致无法登录 | 使用 `--initialize-insecure` 初始化，auth_socket 插件未正确配置 | 使用 `--skip-grant-tables` 启动后手动修改密码，或重新 `--initialize-insecure` |
+| `redis-server: command not found` | Redis 未安装或 PATH 未更新 | `apt install -y redis-server` 后，使用 `/usr/bin/redis-server` |
+| `DruidDriver MBean` 警告 | JDK 17+ Cgroup 兼容性问题 | 无害警告，不影响应用正常运行 |
+
+### 8.6 测试验证
+
+```bash
+# 执行全部单元测试（109 个，沙箱已验证通过）
+cd ruoyi-backend
+mvn test
+
+# 验证 Spring Boot 应用启动
+mvn spring-boot:run -pl ruoyi-admin
+
+# 仅运行特定模块测试
+mvn test -pl ruoyi-workorder
+``` ☐ |
